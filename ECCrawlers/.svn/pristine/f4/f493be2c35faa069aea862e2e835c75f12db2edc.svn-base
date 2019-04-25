@@ -1,0 +1,88 @@
+package com.isentia.ec;
+
+import java.net.URLDecoder;
+import java.util.ArrayList;
+
+import org.apache.log4j.Logger;
+import org.jsoup.Jsoup;
+import org.jsoup.nodes.Document;
+import org.jsoup.nodes.Element;
+
+import com.isentia.dao.ECDAO;
+import com.isentia.ec.base.SKUCrawlers;
+import com.isentia.entity.ECSKU;
+import com.isentia.util.ECUtil;
+import com.mysql.jdbc.exceptions.MySQLIntegrityConstraintViolationException;
+
+public class KakakuSKUCrawlers implements SKUCrawlers{
+	final static Logger logger = Logger.getLogger(KakakuSKUCrawlers.class);
+	public static void main (String [] args){
+		KakakuSKUCrawlers kakaKu = new KakakuSKUCrawlers();
+		ECDAO ecdao = null;
+		try{
+			ecdao = new ECDAO();
+			ecdao.createMasterTicketConnection();
+		}catch(Exception ec){
+			ec.printStackTrace();
+		}
+		try{
+			ArrayList <ECSKU> skuList = kakaKu.crawlData("ムーニー", 444444L);
+			for(ECSKU ec: skuList){
+				try{
+					ecdao.insertIntoSKU(ec);
+				}catch(MySQLIntegrityConstraintViolationException e){
+					e.printStackTrace();
+					if(logger.isDebugEnabled()){
+						logger.debug("Duplicated Entry" + ec.getUrl());
+					}
+				}
+			}
+		}catch(Exception e){
+			e.printStackTrace();
+		}
+		
+	}
+	
+	public ArrayList<ECSKU> crawlData(String keyword,long channelId) throws Exception{
+		ArrayList<ECSKU> ecskuList = new ArrayList<ECSKU>();
+		String unicode = ECUtil.convertUnicode(keyword);
+		for(int page = 1; page<2;page++){
+			String urlCrawl = "http://kakaku.com/search_results/"+unicode+"/?sort=popular&nameonly=off&lid=ksearch_searchbutton&l=l&act=Input&n=120&page="+page;
+			logger.debug("Url -->" + urlCrawl);
+			Document doc = Jsoup.connect(urlCrawl).timeout(0).get();
+			for(Element ele: doc.getElementsByClass("itemInfo")){
+				ECSKU ecsku = new ECSKU();
+				String url  = ele.getElementsByClass("iviewbtn").select("a").attr("href");
+				ecsku.setUrl(url);			
+				ecsku.setContent(ele.getElementsByClass("itemnameN").text());
+				
+				//content currently not needed
+//				contentCell.setCellValue(URLDecoder.decode(ele.getElementsByClass("cate").text()));
+	
+				String price = URLDecoder.decode(ele.getElementsByClass("yen").text());
+				price = price.replaceAll("¥","");
+				price = price.replaceAll(" 〜","");
+				price = price.replaceAll(",","");
+				ecsku.setPrice(Double.parseDouble(price));
+				ecsku.setChannelId(channelId);
+				ecsku.setSearchTerm(keyword);
+				if(url.startsWith("http://kakaku.com/item/")){
+					try{
+						url = url.substring(url.indexOf("http://kakaku.com/item/"), url.indexOf("/?lid=ksearch_kakakuitem_button"));
+						url = url.replace("http://kakaku.com/item/", "");
+						ecsku.setProductId(url);
+					}catch(Exception e){
+						e.printStackTrace();
+					}
+				}
+				
+				if(ECUtil.checkIsValidProduct(keyword,ele.getElementsByClass("itemnameN").text())){
+					ecskuList.add(ecsku);
+				}else{
+					logger.error("Fail to insert the following:" +ecsku.getContent());
+				}
+			}
+		}
+		return ecskuList;
+	}
+}

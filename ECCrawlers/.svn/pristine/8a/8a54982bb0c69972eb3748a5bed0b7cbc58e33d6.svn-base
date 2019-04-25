@@ -1,0 +1,92 @@
+package com.isentia.ec;
+
+import java.util.ArrayList;
+
+import org.apache.log4j.Logger;
+import org.jsoup.Jsoup;
+import org.jsoup.nodes.Document;
+import org.jsoup.nodes.Element;
+
+import com.isentia.dao.ECDAO;
+import com.isentia.entity.ECSKU;
+import com.isentia.util.ECUtil;
+import com.mysql.jdbc.exceptions.MySQLIntegrityConstraintViolationException;
+
+public class RakutenSKUCrawlers {
+	final static Logger logger = Logger.getLogger(RakutenSKUCrawlers.class);
+	public static void main (String [] args){
+		RakutenSKUCrawlers rakutenCrawlers = new RakutenSKUCrawlers();
+		ECDAO ecdao = null;
+		try{
+			ecdao = new ECDAO();
+			ecdao.createMasterTicketConnection();
+		}catch(Exception ec){
+			ec.printStackTrace();
+		}
+		try{
+			ArrayList <ECSKU> skuList = rakutenCrawlers.crawlData(args[0], 30L);
+			logger.debug(skuList.size() + " : SKU Crawled");
+			for(ECSKU ec: skuList){
+				try{
+					ecdao.insertIntoSKU(ec);
+				}catch(MySQLIntegrityConstraintViolationException e){
+					e.printStackTrace();
+					if(logger.isDebugEnabled()){
+						logger.debug("Duplicated Entry" + ec.getUrl());
+					}
+				}
+			}
+		}catch(Exception e){
+			e.printStackTrace();
+		}
+		
+	}
+	
+	public ArrayList<ECSKU> crawlData(String keyword,long channelId) throws Exception{
+		ArrayList<ECSKU> ecskuList = new ArrayList<ECSKU>();
+		String unicode = ECUtil.convertUnicode(keyword);
+		for(int page = 1; page<100;page++){
+			String urlCrawl = "http://search.rakuten.co.jp/search/mall/"+keyword+"/205198/?p="+page;
+			logger.debug("Url -->" + urlCrawl);
+			Document doc = Jsoup.connect(urlCrawl).timeout(0).get();
+			int pageCount = 0;
+			for(Element e:doc.getElementsByClass("rsrSResultItemTxt")){
+				ECSKU ecsku = new ECSKU();
+				if(e.getElementsByClass("copyTxt")!=null){
+					ecsku.setUrl(e.select("h2").select("a").attr("href"));
+				}
+				if(e.getElementsByClass("copyTxt")!=null){
+					ecsku.setContent(e.getElementsByClass("rsrSResultItemTxt").text());
+				}
+				
+				String itemCode = e.getElementsByClass("txtIconReviewNum").select("a").attr("href");
+				itemCode = itemCode.replace("https://review.rakuten.co.jp/item/1/", "");
+				itemCode = itemCode.replace("/1.1/","");
+				String price = doc.getElementsByClass("rsrSResultItemInfo").get(pageCount).select("a").text();
+				price = price.replaceAll("円", "");
+				price = price.replaceAll(",", "");
+				ecsku.setProductId(itemCode);
+				ecsku.setChannelId(channelId);
+				ecsku.setSearchTerm(keyword);
+				if(ECUtil.checkIsValidProduct(keyword, e.getElementsByClass("rsrSResultItemTxt").text())){
+					if(itemCode.length()>0){
+						price = price.trim();
+						price = price.replaceAll(" ", "");
+						double dPrice = Double.parseDouble(price.trim());
+						logger.debug("The Price is:" + dPrice);
+						ecsku.setPrice(dPrice);
+						ecskuList.add(ecsku);
+					}else{
+						logger.debug("This is Rejected Content With No Review: " + e.getElementsByClass("rsrSResultItemTxt").text());
+					}
+				}else{
+					if(logger.isDebugEnabled()){
+						logger.debug("This is Rejected Content: " + e.getElementsByClass("rsrSResultItemTxt").text());
+					}
+				}
+				pageCount++;
+			}
+		}
+		return ecskuList;
+	}
+}

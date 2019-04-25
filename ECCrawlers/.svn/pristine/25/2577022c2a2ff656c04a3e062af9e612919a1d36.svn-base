@@ -1,0 +1,12 @@
+driver=org.gjt.mm.mysql.Driver
+admin_url=jdbc:mysql://192.168.51.101:3306/brandtology?useUnicode=true&characterEncoding=UTF-8
+ticket_url=jdbc:mysql://192.168.51.104:3306/brandtology?useUnicode=true&characterEncoding=UTF-8
+comment_url=jdbc:mysql://192.168.51.103:3306/brandtology?useUnicode=true&characterEncoding=UTF-8
+username=weijian.tan
+password=weijian
+metabase_url=jdbc:mysql://192.168.50.248:3306/metabase?useUnicode=true&characterEncoding=UTF-8
+metabase_username=metabase
+metabase_password=Metabase1234
+ig_url=jdbc:mysql://192.168.52.242:3306/instagram_crawler?useUnicode=true&characterEncoding=UTF-8
+ig_username=igcrawler
+ig_password=igcr@wl3r

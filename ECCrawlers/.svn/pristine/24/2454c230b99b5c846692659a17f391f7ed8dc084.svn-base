@@ -1,0 +1,119 @@
+package com.isentia.ec;
+
+import java.util.ArrayList;
+
+import org.apache.log4j.Logger;
+import org.jsoup.Jsoup;
+import org.jsoup.nodes.Document;
+import org.jsoup.nodes.Element;
+import org.jsoup.select.Elements;
+
+import com.isentia.dao.ECDAO;
+import com.isentia.ec.base.SKUCrawlers;
+import com.isentia.entity.ECSKU;
+import com.isentia.util.ECUtil;
+import com.mysql.jdbc.exceptions.MySQLIntegrityConstraintViolationException;
+
+public class LohacoSKUCrawlers implements SKUCrawlers{
+	final static Logger logger = Logger.getLogger(LohacoSKUCrawlers.class);
+	public static void main (String [] args){
+		LohacoSKUCrawlers lohaCo = new LohacoSKUCrawlers();
+		ECDAO ecdao = null;
+		try{
+			ecdao = new ECDAO();
+			ecdao.createMasterTicketConnection();
+		}catch(Exception ec){
+			ec.printStackTrace();
+		}
+		try{
+			ArrayList <ECSKU> skuList = lohaCo.crawlData("ムーニー", 123455L);
+			if(logger.isDebugEnabled()){
+				logger.debug("Data");
+			}
+			for(ECSKU ec: skuList){
+				try{
+					ecdao.insertIntoSKU(ec);
+				}catch(MySQLIntegrityConstraintViolationException e){
+					if(logger.isDebugEnabled()){
+						logger.debug("Duplicated Entry");
+					}
+				}
+			}
+		}catch(Exception e){
+			e.printStackTrace();
+		}
+	}
+	
+	public ArrayList<ECSKU> crawlData(String keyword,long channelId) throws Exception{
+		ArrayList<ECSKU> ecList = new ArrayList<ECSKU>();
+		Document doc2 = Jsoup.connect("https://lohaco.jp/ksearch/?searchWord="+keyword+"&categoryLl=&categoryL=&categoryM=&categoryS=&categoryLll=").timeout(0).get();
+		String keywordCount = doc2.getElementsByClass("numHitItem").text().replace("件", "");
+		int iKeywordCount = Integer.parseInt(keywordCount);
+		int articlePageFlip = 0;
+		if(iKeywordCount!=0){
+			if(iKeywordCount%10!=0){
+				articlePageFlip = iKeywordCount/10+1;
+			}else{
+				articlePageFlip = iKeywordCount/10;
+			}
+		}
+		for(int p =1;p<=articlePageFlip;p++){
+			Document doc = Jsoup.connect("https://lohaco.jp/ksearch/"+p+"/?searchWord="+keyword+"&categoryLl=&categoryL=&categoryM=&categoryS=&categoryLll=").timeout(0).get();
+			Elements table  = doc.getElementsByClass("productList").select("table");
+			Elements rows = table.select("tr");
+			for (int i = 0; i < rows.size(); i++) { //first row is the col names so skip it.
+			    Element row = rows.get(i);
+			    Elements dt = row.select("dt");
+			    Elements dd = row.select("dd");
+			    String groupURL = dt.select("a").attr("href");
+			    if(groupURL.contains("itemGroup")){
+			    	Document groupDoc = Jsoup.connect("https://lohaco.jp"+groupURL).timeout(0).get();
+			    	Elements groupDocTable= groupDoc.getElementsByClass("productList").get(1).select("table");
+			    	Elements groupRows = groupDocTable.select("tr");
+			    	for (int j = 1; j < groupRows.size(); j++) {
+			    		ECSKU ecsku = new ECSKU();
+			    		Element gRow = groupRows.get(j);
+			    		Elements gdt = gRow.select("dt");
+			    		Elements gdd = gRow.select("dd");
+			    		String dataURL = gdt.select("a").attr("href");
+			    		String itemCode = "";
+						itemCode = dataURL.replace("/product/", "");
+						itemCode = itemCode.replace("/?int_id=variationitem_variationitem", "");
+			    		ecsku.setUrl("https://lohaco.jp"+dataURL);
+			    		ecsku.setContent(gdd.select("a").text());
+						ecsku.setPrice(Double.parseDouble(gRow.getElementsByClass("itemPrice").text()));
+						ecsku.setSearchTerm(keyword);
+						ecsku.setProductId(itemCode);
+						ecsku.setChannelId(channelId);
+						if(ECUtil.checkIsValidProduct(keyword, gdd.select("a").text())){
+							ecList.add(ecsku);
+						}else{
+							if(logger.isDebugEnabled()){
+								logger.debug("This is Rejected Content: " + gdd.select("a").text());
+							}
+						}
+			    	}
+			    }else{
+					String itemCode = "";
+					itemCode = groupURL.replace("/product/", "");
+					itemCode = itemCode.replace("/?int_id=search_keywordsearch", "");
+					ECSKU ecsku = new ECSKU();
+		    		ecsku.setUrl("https://lohaco.jp"+groupURL);
+		    		ecsku.setContent(dd.select("a").text());
+					ecsku.setPrice(Double.parseDouble(row.getElementsByClass("itemPrice").text()));
+					ecsku.setSearchTerm(keyword);
+					ecsku.setProductId(itemCode);
+					ecsku.setChannelId(channelId);
+					if(ECUtil.checkIsValidProduct(keyword, dd.select("a").text())){
+						ecList.add(ecsku);
+					}else{
+						if(logger.isDebugEnabled()){
+							logger.debug("This is Rejected Content: " + dd.select("a").text());
+						}
+					}
+			    }
+			}
+		}
+		return ecList;
+	}
+}

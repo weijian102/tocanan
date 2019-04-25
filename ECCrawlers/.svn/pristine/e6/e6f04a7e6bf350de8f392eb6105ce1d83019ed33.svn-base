@@ -1,0 +1,185 @@
+package com.isentia.dao;
+
+import java.sql.Connection;
+import java.sql.DriverManager;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
+import java.sql.SQLException;
+import java.util.ArrayList;
+import java.util.ResourceBundle;
+
+import org.apache.log4j.Logger;
+
+import com.isentia.entity.ECComments;
+import com.isentia.entity.ECReportEntity;
+import com.isentia.entity.ECSKU;
+
+public class ECDAO {
+	final static Logger logger = Logger.getLogger(ECDAO.class);
+	private Connection master_con_ticket;
+	
+	public ECDAO()  throws ClassNotFoundException, SQLException{
+		this.createMasterTicketConnection();
+	}
+	
+	public void createMasterTicketConnection() throws ClassNotFoundException, SQLException {
+		ResourceBundle rb = ResourceBundle.getBundle("database");
+		Class.forName(rb.getString("driver"));
+		master_con_ticket = DriverManager.getConnection(rb.getString("comment_url"),rb.getString("username"),rb.getString("password"));
+	}
+	
+	public void insertIntoSKU(ECSKU product) throws ClassNotFoundException, SQLException {
+		PreparedStatement ps = null;
+		ResultSet rs = null;
+		String query = "Insert into EC_Article(Product_ID,URL,Channel_ID,DateTime_Crawled,Search_Term,Content,Price,Voice_Name) values (?,?,?,now(),?,?,?,?)";
+		int i =0;
+		try{
+			ps = master_con_ticket.prepareStatement(query);
+			ps.setString(++i, product.getProductId());
+			ps.setString(++i, product.getUrl());
+			ps.setLong(++i, product.getChannelId());
+			ps.setString(++i, product.getSearchTerm());
+			ps.setString(++i, product.getContent());
+			ps.setDouble(++i, product.getPrice());
+			ps.setString(++i, product.getVoiceName());
+			int s = ps.executeUpdate();
+		}catch(SQLException sqle){
+			throw sqle;
+		}finally{
+			if(rs!=null){
+				rs.close();
+			}
+			if(ps!=null){
+				ps.close();
+			}
+		}
+	}
+	
+	public void insertIntoComments(ECComments comments) throws ClassNotFoundException, SQLException {
+		if(!checkIfCommentExist(comments)){
+			PreparedStatement ps = null;
+			ResultSet rs = null;
+			String query = "Insert into EC_Comment(Product_ID,URL,Channel_ID,DateTime_Crawled,DateTime_Posted,Content,Voice_Name,ratings) values (?,?,?,now(),?,?,?,?)";
+			int i =0;
+			try{
+				ps = master_con_ticket.prepareStatement(query);
+				ps.setString(++i, comments.getProductId());
+				ps.setString(++i, comments.getUrl());
+				ps.setLong(++i, comments.getChannelId());
+				ps.setTimestamp(++i,new java.sql.Timestamp(comments.getDatetimePost().getTime()));
+				ps.setString(++i, comments.getContent());
+				ps.setString(++i, comments.getVoiceName());
+				ps.setInt(++i,comments.getRating());
+				int s = ps.executeUpdate();
+			}catch(SQLException sqle){
+				throw sqle;
+			}finally{
+				if(rs!=null){
+					rs.close();
+				}
+				if(ps!=null){
+					ps.close();
+				}
+			}
+		}else{
+			logger.debug("Comment Already Exist");
+		}
+	}
+	
+	private boolean checkIfCommentExist(ECComments ec) throws ClassNotFoundException, SQLException {
+		PreparedStatement ps = null;
+		ResultSet rs = null;
+		boolean isExist = false;
+		String query = "select id from EC_Comment where Product_ID = ? and Content = ? and datetime_posted =? and voice_name = ?";
+		try{
+			ps = master_con_ticket.prepareStatement(query);
+			ps.setString(1, ec.getProductId());
+			ps.setString(2, ec.getContent());
+			ps.setTimestamp(3,new java.sql.Timestamp(ec.getDatetimePost().getTime()));
+			ps.setString(4,ec.getVoiceName());
+			rs = ps.executeQuery();
+			if(rs.next()){
+				isExist = true;
+			}
+		}catch(SQLException sqle){
+			throw sqle;
+		}finally{
+			if(rs!=null){
+				rs.close();
+			}
+			if(ps!=null){
+				ps.close();
+			}
+		}
+		return isExist;
+	}
+	
+	
+	public ArrayList<ECSKU> getAllSKU(String searchTerm,long channelId) throws ClassNotFoundException, SQLException {
+		ArrayList<ECSKU> skuList = new ArrayList<ECSKU>();
+		PreparedStatement ps = null;
+		ResultSet rs = null;
+		String query = "Select product_id,url,channel_id,content from EC_Article where Search_Term = ? and channel_id = ?" ;
+		int i =0;
+		try{
+			ps = master_con_ticket.prepareStatement(query);
+			ps.setString(1, searchTerm);
+			ps.setLong(2, channelId);
+			rs = ps.executeQuery();
+			while(rs.next()){
+				ECSKU ecsku = new ECSKU();
+				ecsku.setProductId(rs.getString("product_id"));
+				ecsku.setUrl(rs.getString("url"));
+				ecsku.setChannelId(rs.getLong("channel_id"));
+				ecsku.setContent(rs.getString("content"));
+				skuList.add(ecsku);
+			}
+		}catch(SQLException sqle){
+			throw sqle;
+		}finally{
+			if(rs!=null){
+				rs.close();
+			}
+			if(ps!=null){
+				ps.close();
+			}
+		}
+		return skuList;
+	}
+	
+	public ArrayList<ECReportEntity> getAllPampersData(String startDate,String endDate) throws Exception{
+		PreparedStatement ps = null;
+		ResultSet rs = null;
+		String query = "select eca.id,eca.product_id,ecc.datetime_posted,eca.url,ecc.voice_name,eca.content,ecc.content,ecc.ratings,eca.search_term,eca.channel_id from EC_Article eca, EC_Comment ecc where eca.product_id = ecc.product_id  and ecc.datetime_posted >= '"+startDate+"' and ecc.datetime_posted < '"+endDate+"'";
+		ArrayList<ECReportEntity> allCommentList = new ArrayList<ECReportEntity>();
+		System.out.println(query);
+		try{
+			ps = master_con_ticket.prepareStatement(query);
+			rs = ps.executeQuery();
+			while(rs.next()){
+				ECReportEntity c = new ECReportEntity();
+				c.setTicketId(rs.getLong(1));
+				c.setProductId(rs.getString(2));
+				c.setDatetimePost(rs.getTimestamp(3));
+				c.setUrl(rs.getString(4));
+				c.setVoiceName(rs.getString(5));
+				c.setTitle(rs.getString(6));
+				c.setContent(rs.getString(7));
+				c.setRatings(rs.getInt(8));
+				c.setSearchTerms(rs.getString(9));
+				c.setChannelId(rs.getLong(10));
+				allCommentList.add(c);
+			}
+		}catch(SQLException sqle){
+			throw sqle;
+		}finally{
+			if(rs!=null){
+				rs.close();
+			}
+			if(ps!=null){
+				ps.close();
+			}
+		}
+		return allCommentList;
+	}
+}

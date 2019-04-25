@@ -1,0 +1,17 @@
+package com.isentia.util;
+
+import java.text.ParseException;
+import java.text.SimpleDateFormat;
+import java.util.Date;
+
+public class DateUtil {
+
+	public static Date convertCorrectDate(String date, String dateFormatOld,String dateFormatExpected) throws ParseException{
+		SimpleDateFormat sdf1 = new SimpleDateFormat (dateFormatOld);
+	    Date d1 = sdf1.parse(date);
+	    SimpleDateFormat sdf2 = new SimpleDateFormat (dateFormatExpected);
+	    String correctDate =sdf2.format(d1);
+	    Date d2 = sdf2.parse(correctDate);
+	    return d2;
+	}
+}

@@ -1,0 +1,141 @@
+package com.isentia.ec.report;
+
+import java.io.FileOutputStream;
+import java.text.SimpleDateFormat;
+import java.util.ArrayList;
+import java.util.Calendar;
+import java.util.Date;
+import java.util.HashMap;
+
+import org.apache.poi.hssf.usermodel.HSSFCellStyle;
+import org.apache.poi.hssf.usermodel.HSSFFont;
+import org.apache.poi.hssf.util.HSSFColor;
+import org.apache.poi.xssf.usermodel.XSSFCell;
+import org.apache.poi.xssf.usermodel.XSSFCellStyle;
+import org.apache.poi.xssf.usermodel.XSSFFont;
+import org.apache.poi.xssf.usermodel.XSSFRow;
+import org.apache.poi.xssf.usermodel.XSSFSheet;
+import org.apache.poi.xssf.usermodel.XSSFWorkbook;
+
+import com.isentia.dao.ECDAO;
+import com.isentia.entity.ECReportEntity;
+
+public class ECReportTemplate {
+
+	public static void main (String [] args) throws Exception{
+		SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd");
+		Date alertTiming = new Date();
+		Calendar cal = Calendar.getInstance();
+		cal.add(Calendar.MONTH, -1);
+		cal.set(Calendar.DATE, 1);
+		cal.set(Calendar.MINUTE, 0);
+		cal.set(Calendar.HOUR_OF_DAY, 0);
+		cal.set(Calendar.SECOND,0);
+		alertTiming = cal.getTime();
+		String sStartDate = sdf.format(alertTiming);
+
+		Date nowDate = new Date();
+		Calendar calNow = Calendar.getInstance();
+		calNow.set(Calendar.DATE, 1);
+		calNow.set(Calendar.MINUTE, 0);
+		calNow.set(Calendar.HOUR_OF_DAY, 0);
+		calNow.set(Calendar.SECOND,0);
+		nowDate = calNow.getTime();
+		String sEndDate = sdf.format(nowDate);
+
+		System.out.println("Start Date --> " + sStartDate);
+		System.out.println("Start Date --> " + sEndDate);	
+
+		ECDAO tdao = new ECDAO();
+		tdao.createMasterTicketConnection();
+		ArrayList<ECReportEntity> reList = tdao.getAllPampersData(sStartDate, sEndDate);
+
+		XSSFWorkbook workbook = new XSSFWorkbook();
+
+		String fileName = "PampersReport.xlsx";
+
+		FileOutputStream fileOut = new FileOutputStream(fileName);
+
+		XSSFSheet worksheet = workbook.createSheet("EC-Data");
+		XSSFRow row1 = worksheet.createRow((short) 0);
+		XSSFFont font = workbook.createFont();
+		font.setBoldweight(HSSFFont.BOLDWEIGHT_BOLD);
+		XSSFCell cellA1 = row1.createCell((short) 0);
+		cellA1.setCellValue("Ticket ID");
+		XSSFCellStyle cellStyle = workbook.createCellStyle();
+		cellStyle.setFillForegroundColor(HSSFColor.GREY_50_PERCENT.index);
+		cellStyle.setFillPattern(HSSFCellStyle.SOLID_FOREGROUND);
+		cellStyle.setFont(font);
+		cellA1.setCellStyle(cellStyle);
+
+		XSSFCell cellB1 = row1.createCell((short) 1);
+		cellB1.setCellValue("Product ID");
+		cellB1.setCellStyle(cellStyle);
+
+		XSSFCell cellC1 = row1.createCell((short) 2);
+		cellC1.setCellValue("DateTime Posted");
+		cellC1.setCellStyle(cellStyle);
+
+		XSSFCell cellD1 = row1.createCell((short) 3);
+		cellD1.setCellValue("URL");
+		cellD1.setCellStyle(cellStyle);
+
+		XSSFCell cellE1 = row1.createCell((short) 4);
+		cellE1.setCellValue("Voice Name");
+		cellE1.setCellStyle(cellStyle);
+
+		XSSFCell cellF1 = row1.createCell((short) 5);
+		cellF1.setCellValue("Title");
+		cellF1.setCellStyle(cellStyle);
+
+		XSSFCell engagementCell = row1.createCell((short) 6);
+		engagementCell.setCellValue("Content");
+		engagementCell.setCellStyle(cellStyle);
+
+		XSSFCell cellG1 = row1.createCell((short) 7);
+		cellG1.setCellValue("Ratings");
+		cellG1.setCellStyle(cellStyle);
+
+		XSSFCell cellh1 = row1.createCell((short) 8);
+		cellh1.setCellValue("Subject Name");
+		cellh1.setCellStyle(cellStyle);
+
+		XSSFCell celli1 = row1.createCell((short) 9);
+		celli1.setCellValue("Channel Name");
+		celli1.setCellStyle(cellStyle);
+		int rowCount =1;
+		for(ECReportEntity re: reList){
+			writeExcel(re,rowCount,worksheet,sdf);
+			rowCount++;
+		}
+		workbook.write(fileOut);
+		fileOut.flush();
+		fileOut.close();
+	}
+	
+	public static void writeExcel(ECReportEntity re,int rowCount,XSSFSheet  worksheet,SimpleDateFormat sdf){
+		XSSFRow row = worksheet.createRow(rowCount);
+		XSSFCell urlCell= row.createCell((short) 0);
+		urlCell.setCellValue(sdf.format(re.getDatetime_posted()));
+		XSSFCell rtCount= row.createCell((short) 1);
+		rtCount.setCellValue(subjectMap.get(re.getSubject_id()));
+		XSSFCell titleV= row.createCell((short) 2);
+		titleV.setCellValue(re.getTitle());
+		XSSFCell contentV= row.createCell((short) 3);
+		contentV.setCellValue(re.getContent());
+		XSSFCell channelV= row.createCell((short) 4);
+		channelV.setCellValue(re.getChannel_name());
+		XSSFCell urlV= row.createCell((short) 5);
+		urlV.setCellValue(re.getUrl());
+		XSSFCell ticketId= row.createCell((short) 6);
+		ticketId.setCellValue(re.getId());
+		XSSFCell viewNo= row.createCell((short) 7);
+		viewNo.setCellValue(re.getViewCount());
+		XSSFCell commentNo= row.createCell((short) 8);
+		commentNo.setCellValue(re.getCommentCount());
+		XSSFCell likesNo= row.createCell((short) 9);
+		likesNo.setCellValue(0);
+		XSSFCell fragranceNo= row.createCell((short) 10);
+				
+	}
+}
